@@ -331,11 +331,12 @@ function sortNumArr(arr) {
 }
 // FUNCTION: isNonEmptyArrayLike ----------------------------------------------------- //
 function isNonEmptyArrayLike(obj) {
-  try { // don't bother with `typeof` - just access `length` and `catch`
-    return obj.length > 0 && '0' in Object(obj);
-  } catch (e) {
-    return false;
-  }
+    try { // don't bother with `typeof` - just access `length` and `catch`
+        return obj.length > 0 && '0' in Object(obj);
+    }
+    catch(e) {
+        return false;
+    }
 }
 // FUNCTION: beats2seconds ----------------------------------------------------------- //
 function beats2seconds(bpm, numbts) {
@@ -361,9 +362,7 @@ function singleTempo(tempo, instNum, startTime, endTime, btIncsAr) {
   var t_incCtr = [];
   if (isNonEmptyArrayLike(t_btIncsAr)) {
     for (var i = 0; i < t_btIncsAr.length; i++) {
-      t_btIncsTcSec.push([t_btIncsAr[i],
-        []
-      ]);
+      t_btIncsTcSec.push([t_btIncsAr[i], []]);
       t_numIncs.push(1);
       t_incCtr.push(0);
     }
@@ -419,8 +418,14 @@ function singleTempoGenerator_numBeats(tempo, instNum, startTime, numBeats, a_bt
 }
 // PROBABILITY --------------------------------------
 function probability(n) {
-  return !!n && Math.random() <= n;
+     return !!n && Math.random() <= n;
 };
+
+
+
+
+
+
 
 
 
