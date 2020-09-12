@@ -1,9 +1,9 @@
 var express = require('express');
 var app = express();
 var path = require('path');
-var timesyncServer = require('timesync/server'); //*************
-
+var timesyncServer = require('timesync/server');
 var http = require('http').createServer(app);
+var io = require('socket.io')(http);
 
 const PORT = process.env.PORT || 5000
 
@@ -16,4 +16,12 @@ app.get('/', function(req, res) {
 http.listen(PORT, () => console.log(`Listening on ${ PORT }`));
 
 // handle timesync requests
-app.use('/timesync', timesyncServer.requestHandler); //*************
+app.use('/timesync', timesyncServer.requestHandler);
+
+//socket.io
+io.on('connection', function(socket) {
+      socket.on('startpiece', function(data) {
+        console.log("yyyy");
+      socket.emit('startpiecebroadcast', {});
+    });
+});
