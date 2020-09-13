@@ -20,8 +20,18 @@ app.use('/timesync', timesyncServer.requestHandler);
 
 //socket.io
 io.on('connection', function(socket) {
-      socket.on('startpiece', function(data) {
-        console.log("yyyy");
-      socket.emit('startpiecebroadcast', {});
+  socket.on('createEvents', function(data) {
+    socket.emit('createEventsBroadcast', {
+      eventdata: data.eventdata,
     });
+  });
+  socket.on('startpiece', function(data) {
+    socket.emit('startpiecebroadcast', {});
+  });
+  socket.on('pause', function(data) {
+    socket.emit('pauseBroadcast', {
+      pauseState: data.pauseState,
+      pauseTime: data.pauseTime
+    });
+  });
 });
