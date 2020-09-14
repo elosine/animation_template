@@ -22,9 +22,12 @@ var availableNotes = [
 // DIAL NOTATION OBJECT ----------- >
 var dial;
 var tickDegs = [];
+var eventData;
 // BUTTONS ------------------------ >
 var activateButtons = false;
 var activateStartBtn = false;
+var activatePauseStopBtn = false;
+var activateSaveBtn = false;
 // START ------------------------ >
 var startPieceGate = true;
 var pauseState = 0;
@@ -37,17 +40,23 @@ socket.on('startpiecebroadcast', function(data) {
   if (startPieceGate) {
     startPieceGate = false;
     activateStartBtn = false;
+    activatePauseStopBtn = true;
     startPiece();
     startBtn.className = 'btn btn-1_inactive';
   }
 });
+// SOCKET MSG: CREATE EVENTS BROADCAST FROM SERVER
 socket.on('createEventsBroadcast', function(data) {
-  dial.generatePiece(data.eventdata)
+  dial.generatePiece(data.eventdata); // run generate Piece function in dial notation object
+  eventData = data.eventdata; // generated event data
   if (startPieceGate) {
     activateStartBtn = true;
+    activateSaveBtn = true;
     startBtn.className = 'btn btn-1';
+    saveBtn.className = 'btn btn-1';
   }
 });
+
 socket.on('pauseBroadcast', function(data) {
   pauseState = data.pauseState;
   if (pauseState == 0) { //unpaused
@@ -65,6 +74,18 @@ socket.on('pauseBroadcast', function(data) {
     var btnDOM = document.getElementById('pauseBtn');
     btnDOM.innerText = 'Un-Pause';
     btnDOM.className = 'btn btn-2';
+  }
+});
+
+// SOCKET MSG: load events pauseBroadcast
+socket.on('loadPieceBroadcast', function(data) {
+  dial.generatePiece(data.eventsArray); // run generate Piece function in dial notation object
+  eventData = data.eventsArray; // generated event data
+  if (startPieceGate) {
+    activateStartBtn = true;
+    activateSaveBtn = true;
+    startBtn.className = 'btn btn-1';
+    saveBtn.className = 'btn btn-1';
   }
 });
 // START TIME SYNC ENGINE ---------------- >
@@ -89,7 +110,7 @@ function startClockSync() {
 // INIT -------------------------------------------------------------- //
 function init() {
   // 02: MAKE CONTROL PANEL ---------------- >
-  mkCtrlPanel("ctrlPanel", 130, 300, "Control Panel");
+  mkCtrlPanel("ctrlPanel", 130, 400, "Control Panel");
   // 03: GET NOTATION SIZES ---------------- >
   availableNotes.forEach(function(it, ix) {
     getImageOgSize(it, function(size, url) {
@@ -423,7 +444,36 @@ function mkCtrlPanel(panelid, w, h, title) {
   loadPieceBtn.style.width = btnW.toString() + "px";
   loadPieceBtn.addEventListener("click", function() {
     if (activateButtons) {
-
+      // UPLOAD pitchChanges from file -------------------------------------- //
+      var input = document.createElement('input'); //open file manager and select file name
+      input.type = 'file';
+      input.onchange = e => {
+        var file = e.target.files[0];
+        var fileName = file.name;
+        //fetch contents of file; parce the string and send to server as array
+        fetch("/savedEvents/" + fileName)
+          .then(response => response.text())
+          .then(text => {
+            var eventsArray = [];
+            var t1 = text.split(";");
+            for (var i = 0; i < t1.length; i++) {
+              if (t1[i] == -1) {
+                eventsArray.push(-1);
+              } else {
+                t2 = [];
+                var temparr = t1[i].split(',');
+                t2.push(temparr[0]);
+                t2.push(parseInt(temparr[1]));
+                t2.push(parseInt(temparr[2]));
+                eventsArray.push(t2);
+              }
+            }
+            socket.emit('loadPiece', {
+              eventsArray: eventsArray
+            });
+          });
+      }
+      input.click();
     }
   });
   ctrlPanelDiv.appendChild(loadPieceBtn);
@@ -439,6 +489,8 @@ function mkCtrlPanel(panelid, w, h, title) {
       if (activateStartBtn) {
         socket.emit('startpiece', {});
         tpanel.smallify();
+        pauseBtn.className = 'btn btn-1';
+        stopBtn.className = 'btn btn-1';
       }
     }
   });
@@ -447,24 +499,26 @@ function mkCtrlPanel(panelid, w, h, title) {
   var pauseBtn = document.createElement("BUTTON");
   pauseBtn.id = 'pauseBtn';
   pauseBtn.innerText = 'Pause';
-  pauseBtn.className = 'btn btn-1';
+  pauseBtn.className = 'btn btn-1_inactive';
   pauseBtn.style.width = btnW.toString() + "px";
   pauseBtn.addEventListener("click", function() {
     if (activateButtons) {
-      pauseState = (pauseState + 1) % 2;
-      var t_now = new Date(ts.now());
-      var pauseTime = t_now.getTime()
-      if (pauseState == 1) { //Paused
-        socket.emit('pause', {
-          pauseState: pauseState,
-          pauseTime: pauseTime
-        });
-      } else if (pauseState == 0) { //unpaused
-        var globalPauseTime = pauseTime - pausedTime;
-        socket.emit('pause', {
-          pauseState: pauseState,
-          pauseTime: globalPauseTime
-        });
+      if (activatePauseStopBtn) {
+        pauseState = (pauseState + 1) % 2;
+        var t_now = new Date(ts.now());
+        var pauseTime = t_now.getTime()
+        if (pauseState == 1) { //Paused
+          socket.emit('pause', {
+            pauseState: pauseState,
+            pauseTime: pauseTime
+          });
+        } else if (pauseState == 0) { //unpaused
+          var globalPauseTime = pauseTime - pausedTime;
+          socket.emit('pause', {
+            pauseState: pauseState,
+            pauseTime: globalPauseTime
+          });
+        }
       }
     }
   });
@@ -473,14 +527,62 @@ function mkCtrlPanel(panelid, w, h, title) {
   var stopBtn = document.createElement("BUTTON");
   stopBtn.id = 'stopBtn';
   stopBtn.innerText = 'Stop';
-  stopBtn.className = 'btn btn-1';
+  stopBtn.className = 'btn btn-1_inactive';
   stopBtn.style.width = btnW.toString() + "px";
   stopBtn.addEventListener("click", function() {
     if (activateButtons) {
-      location.reload();
+      if (activatePauseStopBtn) {
+        location.reload();
+      }
     }
   });
   ctrlPanelDiv.appendChild(stopBtn);
+  // SAVE EVENTS
+  var saveBtn = document.createElement("BUTTON");
+  saveBtn.id = 'saveBtn';
+  saveBtn.innerText = 'Save';
+  saveBtn.className = 'btn btn-1_inactive';
+  saveBtn.style.width = btnW.toString() + "px";
+  saveBtn.addEventListener("click", function() {
+    if (activateButtons) {
+      if (activateSaveBtn) {
+        var eventDataStr = "";
+        for (var i = 0; i < eventData.length; i++) { // format as string to store in a file
+          if (i != (eventData.length - 1)) { //if it is not the last one
+            if (eventData[i] == -1) {
+              eventDataStr = eventDataStr + "-1;"; //not every tick has notation; if not = -1
+            } else {
+              for (var j = 0; j < eventData[i].length; j++) {
+                if (j == (eventData[i].length - 1)) {
+                  eventDataStr = eventDataStr + eventData[i][j].toString() + ";";
+                } else {
+                  eventDataStr = eventDataStr + eventData[i][j].toString() + ",";
+                }
+              }
+            }
+          } else { //last one don't include semicolon
+            if (eventData[i] == -1) {
+              eventDataStr = eventDataStr + "-1";
+            } else {
+              for (var j = 0; j < eventData[i].length; j++) {
+                if (j == (eventData[i].length - 1)) {
+                  eventDataStr = eventDataStr + eventData[i][j].toString();
+                } else {
+                  eventDataStr = eventDataStr + eventData[i][j].toString() + ",";
+                }
+              }
+            }
+
+          }
+        }
+        var t_now = new Date(ts.now());
+        var month = t_now.getMonth() + 1;
+        var eventsFileName = "pulseCycle001_" + t_now.getFullYear() + "_" + month + "_" + t_now.getUTCDate() + "_" + t_now.getHours() + "-" + t_now.getMinutes();
+        downloadStrToHD(eventDataStr, eventsFileName, 'text/plain');
+      }
+    }
+  });
+  ctrlPanelDiv.appendChild(saveBtn);
 
   // jsPanel
   jsPanel.create({

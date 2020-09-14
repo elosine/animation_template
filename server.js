@@ -34,4 +34,11 @@ io.on('connection', function(socket) {
       pauseTime: data.pauseTime
     });
   });
+  // LOAD PIECE
+  socket.on('loadPiece', function(data) {
+    console.log(data.eventsArray);
+    socket.emit('loadPieceBroadcast', {
+      eventsArray: data.eventsArray
+    });
+  });
 });
