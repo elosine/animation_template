@@ -1,19 +1,20 @@
-// GLOBAL VARIABLES ----------------------------------------------------- //
-// CLOCK ------------------------- >
+// GLOBAL VARIABLES ------------------------------------------------------- //
+// CLOCK -------------------------- >
 var framect = 0;
 var delta = 0.0;
 var lastFrameTimeMs = 0.0;
-// TIMING ------------------------ >
+// TIMING ------------------------- >
 var FRAMERATE = 60.0;
 var MSPERFRAME = 1000.0 / FRAMERATE;
 var timeAdjustment = 0;
-// SVG --------------------------- >
+var bpm = 100;
+// SVG ---------------------------- >
 var SVG_NS = "http://www.w3.org/2000/svg";
 var SVG_XLINK = 'http://www.w3.org/1999/xlink';
-// NOTATION SVGs ----------------- >
+// NOTATION SVGs ------------------ >
 var notationUrlSz = []; //[url, w, h]
 var availableNotes = [
-  "/notation/quintuplet_accent_76_46.svg",
+  "/notation/quintuplet_accent.svg",
   "/notation/eight_accent_2ndPartial_27_34.svg",
   "/notation/eight_accent_1stPartial_27_34.svg",
   "/notation/triplet_accent_1st_partial_45_45.svg",
@@ -22,25 +23,45 @@ var availableNotes = [
 // DIAL NOTATION OBJECT ----------- >
 var dial;
 var tickDegs = [];
+// EVENTS/ALGORITHIM ----------- >
 var eventData;
+// CONTROL PANEL ------------------ >
+var controlPanel;
 // BUTTONS ------------------------ >
 var activateButtons = false;
 var activateStartBtn = false;
 var activatePauseStopBtn = false;
 var activateSaveBtn = false;
-// START ------------------------ >
+// START -------------------------- >
 var startPieceGate = true;
 var pauseState = 0;
 var pausedTime = 0;
 var animationGo = true;
-// SOCKET IO ------------------------ >
-var socket = io();
+// SIZE --------------------------- >
+var dialW = 380;
+var dialH = 380;
+///////////////////////////////////////////////////////////////////////////////
+
+
+// SOCKET IO --------------------------------------------------------------- //
+var ioConnection;
+if (window.location.hostname == 'localhost') {
+  ioConnection = io();
+} else {
+  ioConnection = io.connect(window.location.hostname);
+}
+var socket = ioConnection;
 // Socket.io receiver to start piece on reicept of 'startpiecebroadcast' msg
 socket.on('startpiecebroadcast', function(data) {
   if (startPieceGate) {
     startPieceGate = false;
     activateStartBtn = false;
     activatePauseStopBtn = true;
+    controlPanel.smallify();
+    // var pauseBtn = document.getElementById('pauseBtn');
+    pauseBtn.className = 'btn btn-1';
+    // var stopBtn = document.getElementById('stopBtn');
+    stopBtn.className = 'btn btn-1';
     startPiece();
     startBtn.className = 'btn btn-1_inactive';
   }
@@ -56,7 +77,6 @@ socket.on('createEventsBroadcast', function(data) {
     saveBtn.className = 'btn btn-1';
   }
 });
-
 socket.on('pauseBroadcast', function(data) {
   pauseState = data.pauseState;
   if (pauseState == 0) { //unpaused
@@ -76,7 +96,6 @@ socket.on('pauseBroadcast', function(data) {
     btnDOM.className = 'btn btn-2';
   }
 });
-
 // SOCKET MSG: load events pauseBroadcast
 socket.on('loadPieceBroadcast', function(data) {
   dial.generatePiece(data.eventsArray); // run generate Piece function in dial notation object
@@ -88,30 +107,44 @@ socket.on('loadPieceBroadcast', function(data) {
     saveBtn.className = 'btn btn-1';
   }
 });
-// START TIME SYNC ENGINE ---------------- >
+// SOCKET MSG: newTempoBroadcast
+socket.on('newTempoBroadcast', function(data) {
+  dial.newTempoFunc(data.newTempo);
+});
+///////////////////////////////////////////////////////////////////////////////
+
+
+// TIMESYNC ENGINE --------------------------------------------------------- //
+var tsServer;
+if (window.location.hostname == 'localhost') {
+  tsServer = '/timesync';
+} else {
+  tsServer = window.location.hostname + '/timesync';
+}
 var ts = timesync.create({
-  //server: 'https://safe-plateau-48516.herokuapp.com/timesync',
-  server: '/timesync',
+  server: tsServer,
+  // server: '/timesync',
   interval: 1000
 });
 ////////////////////////////////////////////////////////////////////////////
 
-// FUNCTION: startPiece -------------------------------------------------------------- //
+// START UP SEQUENCE ------------------------------------------------------ //
+
+// FUNCTION: startPiece --------------------------------------------------- //
 function startPiece() {
   startClockSync();
   requestAnimationFrame(animationEngine); //change to gate
 }
-// FUNCTION: startClockSync -------------------------------------------------------------- //
+// FUNCTION: startClockSync ----------------------------------------------- //
 function startClockSync() {
   var t_now = new Date(ts.now());
   lastFrameTimeMs = t_now.getTime();
 }
-
-// INIT -------------------------------------------------------------- //
+// INIT ------------------------------------------------------------------- //
 function init() {
-  // 02: MAKE CONTROL PANEL ---------------- >
-  mkCtrlPanel("ctrlPanel", 130, 400, "Control Panel");
-  // 03: GET NOTATION SIZES ---------------- >
+  // 01: MAKE CONTROL PANEL ---------------- >
+  controlPanel = mkCtrlPanel("ctrlPanel", dialW, 200, "Control Panel");
+  // 02: GET NOTATION SIZES ---------------- >
   availableNotes.forEach(function(it, ix) {
     getImageOgSize(it, function(size, url) {
       var sizeArr = [];
@@ -125,9 +158,8 @@ function init() {
       }
     });
   });
-  // MODIFY GENERATE NOTATION FUNCTION FOR NOTES LOOKUP
-  // 04: GENERATE STATIC ELEMENTS ---------------- >
-  dial = mkDialNO(0, 500, 500, 50, 5, 12, 100);
+  // 03: GENERATE STATIC ELEMENTS ---------------- >
+  dial = mkDialNO(0, dialW, dialH, 50, 5, 12, bpm);
 }
 ////////////////////////////////////////////////////////////////////////////
 
@@ -147,6 +179,7 @@ function getImageOgSize(url, callback) {
 ////////////////////////////////////////////////////////////////////////////
 
 
+// FUNCTION GENERATE PIECE ALGORITHIM ----------------------------------- //
 function generateNotation() {
   var notationSet = [];
   for (var i = 0; i < tickDegs.length; i++) {
@@ -162,14 +195,16 @@ function generateNotation() {
   }
   return notationSet;
 }
+////////////////////////////////////////////////////////////////////////////
 
 
 // FUNCTION MAKE DIAL NOTATION OBJECT ------------------------------------- //
-function mkDialNO(ix, w, h, x, y, numTicks, bpm) {
+function mkDialNO(ix, w, h, x, y, numTicks, ibpm) { // Create OBJECT
+  var notationObj = {}; //returned object to add all elements and data
   var cx = w / 2;
   var cy = h / 2;
-  var innerRadius = 70;
-  var noteSpace = 65;
+  var innerRadius = 80;
+  var noteSpace = 70;
   var midRadius = innerRadius + noteSpace;
   var defaultStrokeWidth = 4;
   var outerRadius = w / 2;
@@ -180,12 +215,16 @@ function mkDialNO(ix, w, h, x, y, numTicks, bpm) {
   var noteBoxes = [];
   for (var i = 0; i < numTicks; i++) tickBlinkTimes.push(0); //populate w/0s
   // Calculate number of degrees per frame
-  var beatsPerSec = bpm / 60;
+  var beatsPerSec = ibpm / 60;
   var beatsPerFrame = beatsPerSec / FRAMERATE;
   var degreesPerBeat = 360 / numTicks;
   var degreesPerFrame = degreesPerBeat * beatsPerFrame;
-  // Create OBJECT
-  var notationObj = {}; //returned object to add all elements and data
+  notationObj['newTempoFunc'] =
+    function newTempo(newBPM) {
+      var newBeatsPerSec = newBPM / 60;
+      var newBeatsPerFrame = newBeatsPerSec / FRAMERATE;
+      degreesPerFrame = degreesPerBeat * newBeatsPerFrame;
+    }
   // Generate ID
   var id = 'dial' + ix;
   notationObj['id'] = id;
@@ -195,7 +234,7 @@ function mkDialNO(ix, w, h, x, y, numTicks, bpm) {
   notationObj['canvas'] = svgCanvas;
   // Make jsPanel ----------------- >
   var panelID = id + 'panel';
-  var panel = mkPanel(panelID, svgCanvas, x, y, w, h, 'Dial ' + ix); //see func below
+  var panel = mkPanel(panelID, svgCanvas, x, y, w, h, 'Pulse Cycle 002'); //see func below
   notationObj['panel'] = panel;
   // STATIC ELEMENTS ----------------------------- >
   //// Ring -------------------------------- //
@@ -411,6 +450,7 @@ function mkPanel(panelid, svgcanvas, posx, posy, w, h, title) {
 }
 ////////////////////////////////////////////////////////////////////////////
 
+
 // MAKE CONTROL PANEL ------------------------------------------------------ //
 function mkCtrlPanel(panelid, w, h, title) {
   var tpanel;
@@ -420,13 +460,15 @@ function mkCtrlPanel(panelid, w, h, title) {
   ctrlPanelDiv.style.height = h.toString() + "px";
   ctrlPanelDiv.setAttribute("id", "ctrlPanel");
   ctrlPanelDiv.style.backgroundColor = "black";
-  var btnW = w - 18;
-  //Generate Piece
+  var btnW = 98;
+  // GENERATE PIECE -------------------------------------- >
   var generateNotationButton = document.createElement("BUTTON");
   generateNotationButton.id = 'generateNotationButton';
   generateNotationButton.innerText = 'Generate Piece';
   generateNotationButton.className = 'btn btn-1';
   generateNotationButton.style.width = btnW.toString() + "px";
+  generateNotationButton.style.top = "0px";
+  generateNotationButton.style.left = "0px";
   generateNotationButton.addEventListener("click", function() {
     if (activateButtons) {
       var newNotation = generateNotation();
@@ -436,12 +478,15 @@ function mkCtrlPanel(panelid, w, h, title) {
     }
   });
   ctrlPanelDiv.appendChild(generateNotationButton);
-  //Load Piece
+  // LOAD PIECE ------------------------------------------ >
   var loadPieceBtn = document.createElement("BUTTON");
   loadPieceBtn.id = 'loadPieceBtn';
   loadPieceBtn.innerText = 'Load Piece';
   loadPieceBtn.className = 'btn btn-1';
   loadPieceBtn.style.width = btnW.toString() + "px";
+  // loadPieceBtn.style.top = "66px";
+  loadPieceBtn.style.top = "96px";
+  loadPieceBtn.style.left = "0px";
   loadPieceBtn.addEventListener("click", function() {
     if (activateButtons) {
       // UPLOAD pitchChanges from file -------------------------------------- //
@@ -479,30 +524,31 @@ function mkCtrlPanel(panelid, w, h, title) {
     }
   });
   ctrlPanelDiv.appendChild(loadPieceBtn);
-  // START
+  // START ------------------------- >
   var startBtn = document.createElement("BUTTON");
   startBtn.id = 'startBtn';
   startBtn.innerText = 'START';
   startBtn.className = 'btn btn-1_inactive';
   startBtn.style.width = btnW.toString() + "px";
-  startBtn.style.height = "60px";
+  startBtn.style.height = "101px";
+  startBtn.style.top = "0px";
+  startBtn.style.left = "110px";
   startBtn.addEventListener("click", function() {
     if (activateButtons) {
       if (activateStartBtn) {
         socket.emit('startpiece', {});
-        tpanel.smallify();
-        pauseBtn.className = 'btn btn-1';
-        stopBtn.className = 'btn btn-1';
       }
     }
   });
   ctrlPanelDiv.appendChild(startBtn);
-  // PAUSE
+  // PAUSE ------------------------- >
   var pauseBtn = document.createElement("BUTTON");
   pauseBtn.id = 'pauseBtn';
   pauseBtn.innerText = 'Pause';
   pauseBtn.className = 'btn btn-1_inactive';
   pauseBtn.style.width = btnW.toString() + "px";
+  pauseBtn.style.top = "0px";
+  pauseBtn.style.left = "216px";
   pauseBtn.addEventListener("click", function() {
     if (activateButtons) {
       if (activatePauseStopBtn) {
@@ -531,6 +577,8 @@ function mkCtrlPanel(panelid, w, h, title) {
   stopBtn.innerText = 'Stop';
   stopBtn.className = 'btn btn-1_inactive';
   stopBtn.style.width = btnW.toString() + "px";
+  stopBtn.style.top = "48px";
+  stopBtn.style.left = "216px";
   stopBtn.addEventListener("click", function() {
     if (activateButtons) {
       if (activatePauseStopBtn) {
@@ -545,6 +593,8 @@ function mkCtrlPanel(panelid, w, h, title) {
   saveBtn.innerText = 'Save';
   saveBtn.className = 'btn btn-1_inactive';
   saveBtn.style.width = btnW.toString() + "px";
+  saveBtn.style.top = "96px";
+  saveBtn.style.left = "216px";
   saveBtn.addEventListener("click", function() {
     if (activateButtons) {
       if (activateSaveBtn) {
@@ -585,10 +635,35 @@ function mkCtrlPanel(panelid, w, h, title) {
     }
   });
   ctrlPanelDiv.appendChild(saveBtn);
+  // CHANGE TEMPO BUTTON
+  var chgTempoBtn = document.createElement("BUTTON");
+  chgTempoBtn.id = 'chgTempoBtn';
+  chgTempoBtn.innerText = 'BPM';
+  chgTempoBtn.className = 'btn btn-1';
+  chgTempoBtn.style.width = "40%";
+  chgTempoBtn.addEventListener("click", function() {
+    if (activateButtons) {
+      socket.emit('newTempo', {
+        newTempo: tempoInputField.value
+      });
+    }
+  });
+  // ctrlPanelDiv.appendChild(chgTempoBtn);
+  // TEMPO INPUT FIELD
+  var tempoInputField = document.createElement("input");
+  tempoInputField.type = 'text';
+  tempoInputField.className = 'input__field--yoshiko';
+  tempoInputField.id = 'tempoInputField';
+  tempoInputField.value = bpm;
+  tempoInputField.addEventListener("click", function() {
+    tempoInputField.focus();
+    tempoInputField.select();
+  });
+  // ctrlPanelDiv.appendChild(tempoInputField);
 
   // jsPanel
   jsPanel.create({
-    position: 'left-top',
+    position: 'center-bottom',
     id: panelid,
     contentSize: w.toString() + " " + h.toString(),
     header: 'auto-show-hide',
@@ -598,6 +673,11 @@ function mkCtrlPanel(panelid, w, h, title) {
       maximize: 'remove',
       close: 'remove'
     },
+    onsmallified: function(panel, status) {
+      var headerH = window.innerHeight - 36;
+      headerH = headerH.toString() + "px";
+      panel.style.top = headerH;
+    },
     contentOverflow: 'hidden',
     headerTitle: '<small>' + title + '</small>',
     theme: "light",
@@ -606,9 +686,9 @@ function mkCtrlPanel(panelid, w, h, title) {
       aspectRatio: 'content',
       resize: function(panel, paneldata, e) {}
     },
-    dragit: {
-      disable: true
-    },
+    // dragit: {
+    //   disable: true
+    // },
     callback: function() {
       tpanel = this;
     }

@@ -4,6 +4,7 @@ body {
   margin: 0;
   padding: 0;
 }
+
 /* General button style */
 .btn {
   letter-spacing: 1px;
@@ -11,13 +12,13 @@ body {
   margin: 9px 9px;
   border: none;
   font-family: 'Lato';
-  font-size: 13px;
+  font-size: 14px;
   color: inherit;
   background: none;
   display: inline-block;
   font-variant: small-caps;
   outline: none;
-  position: relative;
+  position: absolute;
   -webkit-transition: all 0.3s;
   -moz-transition: all 0.3s;
   transition: all 0.3s;
@@ -47,7 +48,7 @@ body {
 
 .btn-1:hover {
   box-shadow: 0 8px #17954c;
-	background: #24b662;
+  background: #24b662;
   color: black;
   top: -2px;
 }
@@ -70,7 +71,27 @@ body {
 
 .btn-2:hover {
   box-shadow: 0 8px #da9622;
-	background: #fcad26;
+  background: #fcad26;
   color: black;
   top: -2px;
+}
+
+.input__field--yoshiko {
+  position: relative;
+  display: block;
+  float: right;
+  width: calc(50% - 42px);
+  font-size: 13px;
+  padding: 5px 5px;
+  margin: 11px 11px;
+  border-radius: 0;
+  color: #000000;
+  font-weight: 400;
+  font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background-color: #a3d39c;
+  border: 2px solid transparent;
+}
+
+.input__field--yoshiko:focus{
+  outline: none;
 }

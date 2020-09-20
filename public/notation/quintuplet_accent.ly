@@ -42,7 +42,8 @@
     \layout{
       \context {
         \Score
-        %proportionalNotationDuration = #(ly:make-moment 1/128)
+       %proportionalNotationDuration = #(ly:make-moment 1/128)
+       proportionalNotationDuration = #(ly:make-moment 1/8)
         \override SpacingSpanner.uniform-stretching = ##t
         \override SpacingSpanner.strict-note-spacing = ##t
         \override SpacingSpanner.strict-grace-spacing = ##t
